@@ -45,6 +45,8 @@ object HdFullProvider : Provider {
     private const val EMBED_HEIGHT = 360
     private const val CACHE_USERNAME = "username"
     private const val CACHE_PASSWORD = "password"
+    private const val CLEARANCE_PREFS = "hdfull_clearance"
+    private const val CLEARANCE_TOKEN_KEY = "cf_clearance"
     private const val MISSING_CREDENTIALS_MESSAGE =
         "HdFull requires a saved username and password in provider settings."
     private val manualCompletionHosts = setOf(
@@ -63,6 +65,8 @@ object HdFullProvider : Provider {
         Log.d(TAG, "Authentication state reset")
     }
 
+    fun hasConfiguredCredentials(): Boolean = hasStoredCredentials()
+
     private class MissingCredentialsException : IllegalStateException(MISSING_CREDENTIALS_MESSAGE)
 
     private class CloudflareTransportException(message: String) : IllegalStateException(message)
@@ -75,8 +79,10 @@ object HdFullProvider : Provider {
 
     fun init(context: Context) {
         CookieManager.getInstance().setAcceptCookie(true)
+        restorePersistedClearance(context)
         webViewResolver = WebViewResolver(context)
         HdFullCronetClient.init(context)
+        persistClearanceCookie(baseUrl)
         logCookieSnapshot(baseUrl)
     }
 
@@ -420,6 +426,10 @@ object HdFullProvider : Provider {
     }
 
     private suspend fun ensureAuthenticatedSession(targetUrl: String = baseUrl) {
+        // Do this check before touching AuthManager. AuthManager may open the Cloudflare WebView,
+        // which is pointless (and can loop on the login page) when HDFull credentials are not
+        // configured.
+        ensureStoredCredentials()
         if (authenticatedSessionReady) return
         AuthManager.ensureAuthenticated(targetUrl)
     }
@@ -577,13 +587,35 @@ object HdFullProvider : Provider {
         // Cloudflare clearance must be established before any native login request. Keeping both
         // operations inside AuthManager's single-flight transaction prevents parallel callers from
         // opening more dialogs or starting their own login attempts.
-        solveCloudflareChallenge(baseUrl)
+        // A WebView clearance cookie survives process restarts through the provider bridge.
+        // Reuse it and avoid reopening the challenge unless the native request proves it stale.
+        val persistedClearance = clearanceToken(cookieHeaderForLogging(baseUrl))
+        val reusedClearance = !persistedClearance.isNullOrBlank()
+        if (!reusedClearance) {
+            solveCloudflareChallenge(baseUrl)
+        } else {
+            Log.d(TAG, "Reusing persisted HdFull Cloudflare clearance")
+        }
 
-        val loginPage = executeRequest(loginUrl, authHeaders(baseUrl))
+        var loginPage = executeRequest(loginUrl, authHeaders(baseUrl))
         if (loginPage.code == 403 || looksLikeCloudflarePage(loginPage.body, loginPage.finalUrl)) {
-            throw CloudflareTransportException(
-                "HdFull rejected the native login request after Cloudflare clearance",
-            )
+            if (!reusedClearance) {
+                throw CloudflareTransportException(
+                    "HdFull rejected the native login request after Cloudflare clearance",
+                )
+            }
+
+            // A persisted token may survive locally after Cloudflare invalidates it server-side.
+            // Drop only HDFull's token and obtain a fresh one before giving up.
+            Log.w(TAG, "Persisted HdFull clearance rejected; renewing through WebView")
+            clearPersistedClearance()
+            solveCloudflareChallenge(baseUrl, rejectedClearance = persistedClearance)
+            loginPage = executeRequest(loginUrl, authHeaders(baseUrl))
+            if (loginPage.code == 403 || looksLikeCloudflarePage(loginPage.body, loginPage.finalUrl)) {
+                throw CloudflareTransportException(
+                    "HdFull rejected the renewed Cloudflare clearance",
+                )
+            }
         }
 
         check(loginPage.code in 200..299) {
@@ -636,37 +668,94 @@ object HdFullProvider : Provider {
         Log.d(TAG, "Native Cronet authentication succeeded")
     }
 
-    private suspend fun solveCloudflareChallenge(url: String) {
+    private suspend fun solveCloudflareChallenge(
+        url: String,
+        rejectedClearance: String? = null,
+    ) {
         Log.d(TAG, "Opening WebView only for Cloudflare clearance -> url=$url")
         val result = getResolver().getResult(
             url = url,
             // CookieManager supplies WebView cookies. An explicit Cookie header would freeze the
             // pre-challenge value and can override the clearance WebView is about to refresh.
             headers = authHeaders(baseUrl).filterKeys { !it.equals("Cookie", ignoreCase = true) },
+            // Keep the TV challenge at the shared WebView scale. The smaller override makes
+            // Turnstile and the surrounding page unnecessarily difficult to use on TV.
+            initialScale = 85,
+            pageZoom = "0.85",
             shouldAllowNavigation = { navigationUrl, _ -> isAllowedHdFullAuthNavigation(navigationUrl) },
             completion = { currentUrl, html, cookies ->
-                val hasClearance = cookies.split(';').any {
-                    it.trim().startsWith("cf_clearance=", ignoreCase = true)
-                } || cookieHeaderForLogging(currentUrl).split(';').any {
+                CookieManager.getInstance().flush()
+                val observedCookies = listOf(
+                    cookies,
+                    cookieHeaderForLogging(currentUrl),
+                    cookieHeaderForLogging(baseUrl),
+                ).filter { it.isNotBlank() }.distinct().joinToString("; ")
+                val hasClearance = observedCookies.split(';').any {
                     it.trim().startsWith("cf_clearance=", ignoreCase = true)
                 }
+                val newClearance = clearanceToken(observedCookies)
+                val isNewClearance = hasClearance && newClearance != rejectedClearance
 
-                !looksLikeCloudflarePage(html, currentUrl) &&
-                    currentUrl.contains("hdfull", ignoreCase = true) &&
+                // Cloudflare can set cf_clearance before the challenge document navigates away
+                // from the challenge page. Waiting for non-challenge HTML here leaves the WebView
+                // polling forever even though the token is already available for native login.
+                currentUrl.contains("hdfull", ignoreCase = true) &&
                     html.length > 500 &&
-                    hasClearance
+                    isNewClearance
             },
         )
         synchronizeCookies(result.finalUrl)
-        check(hasHdFullClearanceCookie(result.finalUrl ?: url)) {
-            "HdFull Cloudflare clearance cookie was not obtained"
+        val resultingClearance = clearanceToken(cookieHeaderForLogging(result.finalUrl ?: url))
+        check(!resultingClearance.isNullOrBlank() && resultingClearance != rejectedClearance) {
+            "HdFull Cloudflare did not issue a new clearance cookie"
         }
+        persistClearanceCookie(result.finalUrl ?: url)
+    }
+
+    private fun clearanceToken(cookieHeader: String?): String? {
+        return cookieHeader
+            ?.split(';')
+            ?.map(String::trim)
+            ?.firstOrNull { it.startsWith("cf_clearance=", ignoreCase = true) }
+            ?.substringAfter('=')
+            ?.takeIf(String::isNotBlank)
     }
 
     private fun hasHdFullClearanceCookie(url: String): Boolean {
         return cookieHeaderForLogging(url).split(';').any {
             it.trim().startsWith("cf_clearance=", ignoreCase = true)
         }
+    }
+
+    private fun persistClearanceCookie(url: String) {
+        val token = cookieHeaderForLogging(url).split(';')
+            .map(String::trim)
+            .firstOrNull { it.startsWith("cf_clearance=", ignoreCase = true) }
+            ?.substringAfter('=')
+            ?.takeIf(String::isNotBlank)
+            ?: return
+        StreamFlixApp.instance.getSharedPreferences(CLEARANCE_PREFS, Context.MODE_PRIVATE)
+            .edit().putString(CLEARANCE_TOKEN_KEY, token).apply()
+    }
+
+    private fun restorePersistedClearance(context: Context) {
+        val token = context.getSharedPreferences(CLEARANCE_PREFS, Context.MODE_PRIVATE)
+            .getString(CLEARANCE_TOKEN_KEY, null)?.trim().orEmpty()
+        if (token.isBlank()) return
+        CookieManager.getInstance().setCookie(
+            baseUrl,
+            "cf_clearance=$token; Path=/; Secure; HttpOnly",
+        )
+        CookieManager.getInstance().flush()
+    }
+
+    private fun clearPersistedClearance() {
+        CookieManager.getInstance().apply {
+            setCookie(baseUrl, "cf_clearance=; Max-Age=0; Path=/; Secure")
+            flush()
+        }
+        StreamFlixApp.instance.getSharedPreferences(CLEARANCE_PREFS, Context.MODE_PRIVATE)
+            .edit().remove(CLEARANCE_TOKEN_KEY).apply()
     }
 
     private suspend fun <T> retryWithAuthRecovery(
@@ -782,6 +871,9 @@ object HdFullProvider : Provider {
         private var activeRecovery: CompletableDeferred<Unit>? = null
 
         suspend fun ensureAuthenticated(targetUrl: String, force: Boolean = false) {
+            // Keep the no-credentials path side-effect free even when authentication is requested
+            // directly by a recovery or a concurrent provider operation.
+            ensureStoredCredentials()
             if (!force && authenticatedSessionReady) {
                 return
             }

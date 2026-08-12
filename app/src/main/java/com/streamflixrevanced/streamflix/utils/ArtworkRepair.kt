@@ -14,6 +14,7 @@ import com.streamflixrevanced.streamflix.database.AppDatabase
 import com.streamflixrevanced.streamflix.models.Movie
 import com.streamflixrevanced.streamflix.models.TvShow
 import com.streamflixrevanced.streamflix.providers.AniWorldProvider
+import com.streamflixrevanced.streamflix.providers.HdFullProvider
 import com.streamflixrevanced.streamflix.providers.Provider
 import com.streamflixrevanced.streamflix.providers.IptvProvider
 import com.streamflixrevanced.streamflix.providers.SerienStreamProvider
@@ -111,6 +112,12 @@ object ArtworkRepair {
         provider: Provider,
         database: AppDatabase,
     ) {
+        // HDFull requires an account. Background artwork repair must not start its login/WebView
+        // flow when the provider has not been configured by the user.
+        if (provider === HdFullProvider && !HdFullProvider.hasConfiguredCredentials()) {
+            Log.d(TAG, "Skipping HDFull artwork repair because credentials are not configured")
+            return
+        }
         prepareProvider(context, provider)
 
         // Batch TV show IDs and fetch existing shows in one DB call

@@ -9,6 +9,7 @@ import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
+import com.streamflixrevanced.streamflix.providers.HdFullProvider
 import java.util.concurrent.TimeUnit
 
 object HomeCacheRefreshScheduler {
@@ -40,6 +41,10 @@ class HomeCacheRefreshWorker(
 
     override suspend fun doWork(): Result {
         val provider = UserPreferences.currentProvider ?: return Result.success()
+        if (provider === HdFullProvider && !HdFullProvider.hasConfiguredCredentials()) {
+            Log.d(TAG, "Skipping HDFull home refresh because credentials are not configured")
+            return Result.success()
+        }
 
         return runCatching {
             HomeCacheStore.write(applicationContext, provider, provider.getHome())
