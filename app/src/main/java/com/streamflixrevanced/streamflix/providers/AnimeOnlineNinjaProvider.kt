@@ -144,11 +144,9 @@ object AnimeOnlineNinjaProvider : Provider {
             getResolver().getResult(
                 url = url,
                 headers = pageHeaders(referer).minus("Cookie"),
-                // Challenge pages are rendered at desktop scale on some Android WebView
-                // builds. Keep this override local to Anime Online Ninja; other resolver users
-                // retain the shared defaults.
-                initialScale = 60,
-                pageZoom = "0.60",
+                // Keep the challenge at the shared WebView scale so it remains usable on TV.
+                initialScale = 85,
+                pageZoom = "0.85",
                 nativeResourceHosts = { resourceUrl ->
                     runCatching {
                         val host = URL(resourceUrl).host
@@ -172,19 +170,18 @@ object AnimeOnlineNinjaProvider : Provider {
                         .joinToString("; ")
                     val newClearance = clearanceToken(observedCookies)
                     val hasClearance = !newClearance.isNullOrBlank()
+                    val isNewClearance = hasClearance && newClearance != rejectedClearance
                     val hasUsableContent = hasUsableSiteContent(html, currentUrl)
-                    if (hasClearance) promoteClearanceCookieHeader(observedCookies)
+                    if (isNewClearance) promoteClearanceCookieHeader(observedCookies)
                     Log.d(
                         TAG,
                         "WebView challenge poll -> url=$currentUrl clearance=$hasClearance " +
-                                "changed=${newClearance != currentClearance} content=$hasUsableContent"
+                                "changed=${newClearance != rejectedClearance} content=$hasUsableContent"
                     )
-                    // Do not finish the resolver just because the challenge page has
-                    // rendered provider-looking markup. Cloudflare can briefly expose
-                    // the site's shell before CookieManager has received cf_clearance;
-                    // WebViewResolver.cleanup() would then destroy the WebView and the
-                    // clearance would never make it to Cronet.
-                    hasClearance
+                    // A stale clearance cookie is not a successful challenge. Finishing here
+                    // would hand the same token back to Cronet and immediately start the loop
+                    // again.
+                    isNewClearance
                 },
                 shouldAllowNavigation = { targetUrl, _ ->
                     runCatching {
@@ -199,9 +196,10 @@ object AnimeOnlineNinjaProvider : Provider {
             )
         }
 
-        if (clearanceToken(currentClearanceCookie()).isNullOrBlank()) {
+        val resultingClearance = clearanceToken(currentClearanceCookie())
+        if (resultingClearance.isNullOrBlank() || resultingClearance == rejectedClearance) {
             throw ChallengeRequiredException(
-                message = "Cloudflare clearance was not obtained for $url",
+                message = "Cloudflare did not issue a new clearance for $url",
                 rejectedClearance = rejectedClearance,
             )
         }

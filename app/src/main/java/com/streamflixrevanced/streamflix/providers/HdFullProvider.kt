@@ -589,7 +589,8 @@ object HdFullProvider : Provider {
         // opening more dialogs or starting their own login attempts.
         // A WebView clearance cookie survives process restarts through the provider bridge.
         // Reuse it and avoid reopening the challenge unless the native request proves it stale.
-        val reusedClearance = hasHdFullClearanceCookie(baseUrl)
+        val persistedClearance = clearanceToken(cookieHeaderForLogging(baseUrl))
+        val reusedClearance = !persistedClearance.isNullOrBlank()
         if (!reusedClearance) {
             solveCloudflareChallenge(baseUrl)
         } else {
@@ -608,7 +609,7 @@ object HdFullProvider : Provider {
             // Drop only HDFull's token and obtain a fresh one before giving up.
             Log.w(TAG, "Persisted HdFull clearance rejected; renewing through WebView")
             clearPersistedClearance()
-            solveCloudflareChallenge(baseUrl)
+            solveCloudflareChallenge(baseUrl, rejectedClearance = persistedClearance)
             loginPage = executeRequest(loginUrl, authHeaders(baseUrl))
             if (loginPage.code == 403 || looksLikeCloudflarePage(loginPage.body, loginPage.finalUrl)) {
                 throw CloudflareTransportException(
@@ -667,17 +668,20 @@ object HdFullProvider : Provider {
         Log.d(TAG, "Native Cronet authentication succeeded")
     }
 
-    private suspend fun solveCloudflareChallenge(url: String) {
+    private suspend fun solveCloudflareChallenge(
+        url: String,
+        rejectedClearance: String? = null,
+    ) {
         Log.d(TAG, "Opening WebView only for Cloudflare clearance -> url=$url")
         val result = getResolver().getResult(
             url = url,
             // CookieManager supplies WebView cookies. An explicit Cookie header would freeze the
             // pre-challenge value and can override the clearance WebView is about to refresh.
             headers = authHeaders(baseUrl).filterKeys { !it.equals("Cookie", ignoreCase = true) },
-            // HDFull's challenge is frequently laid out at an unusable size on TV WebView
-            // implementations. Scope the smaller challenge layout to this provider only.
-            initialScale = 60,
-            pageZoom = "0.60",
+            // Keep the TV challenge at the shared WebView scale. The smaller override makes
+            // Turnstile and the surrounding page unnecessarily difficult to use on TV.
+            initialScale = 85,
+            pageZoom = "0.85",
             shouldAllowNavigation = { navigationUrl, _ -> isAllowedHdFullAuthNavigation(navigationUrl) },
             completion = { currentUrl, html, cookies ->
                 CookieManager.getInstance().flush()
@@ -689,20 +693,32 @@ object HdFullProvider : Provider {
                 val hasClearance = observedCookies.split(';').any {
                     it.trim().startsWith("cf_clearance=", ignoreCase = true)
                 }
+                val newClearance = clearanceToken(observedCookies)
+                val isNewClearance = hasClearance && newClearance != rejectedClearance
 
                 // Cloudflare can set cf_clearance before the challenge document navigates away
                 // from the challenge page. Waiting for non-challenge HTML here leaves the WebView
                 // polling forever even though the token is already available for native login.
                 currentUrl.contains("hdfull", ignoreCase = true) &&
                     html.length > 500 &&
-                    hasClearance
+                    isNewClearance
             },
         )
         synchronizeCookies(result.finalUrl)
-        check(hasHdFullClearanceCookie(result.finalUrl ?: url)) {
-            "HdFull Cloudflare clearance cookie was not obtained"
+        val resultingClearance = clearanceToken(cookieHeaderForLogging(result.finalUrl ?: url))
+        check(!resultingClearance.isNullOrBlank() && resultingClearance != rejectedClearance) {
+            "HdFull Cloudflare did not issue a new clearance cookie"
         }
         persistClearanceCookie(result.finalUrl ?: url)
+    }
+
+    private fun clearanceToken(cookieHeader: String?): String? {
+        return cookieHeader
+            ?.split(';')
+            ?.map(String::trim)
+            ?.firstOrNull { it.startsWith("cf_clearance=", ignoreCase = true) }
+            ?.substringAfter('=')
+            ?.takeIf(String::isNotBlank)
     }
 
     private fun hasHdFullClearanceCookie(url: String): Boolean {
