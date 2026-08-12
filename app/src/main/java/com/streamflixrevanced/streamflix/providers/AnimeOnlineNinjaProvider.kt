@@ -150,7 +150,12 @@ object AnimeOnlineNinjaProvider : Provider {
                         "WebView challenge poll -> url=$currentUrl clearance=$hasClearance " +
                                 "changed=${newClearance != currentClearance} content=$hasUsableContent"
                     )
-                    hasClearance || hasUsableContent
+                    // Do not finish the resolver just because the challenge page has
+                    // rendered provider-looking markup. Cloudflare can briefly expose
+                    // the site's shell before CookieManager has received cf_clearance;
+                    // WebViewResolver.cleanup() would then destroy the WebView and the
+                    // clearance would never make it to Cronet.
+                    hasClearance
                 },
                 shouldAllowNavigation = { targetUrl, _ ->
                     runCatching {
