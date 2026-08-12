@@ -110,7 +110,6 @@ class HomeViewModel : ViewModel() {
     private var currentProvider: Provider? = null
     private var ratingRefreshJob: Job? = null
     private val isLoadingHome = AtomicBoolean(false)
-    private val reportedMissingHdFullCredentials = AtomicBoolean(false)
     private val syncedSeasonRepairs = ConcurrentHashMap.newKeySet<String>()
     private val seasonRepairQueue = Channel<SeasonRepair>(Channel.UNLIMITED)
 
@@ -745,25 +744,17 @@ class HomeViewModel : ViewModel() {
         val appContext = StreamFlixApp.instance.applicationContext
 
         if (provider is HdFullProvider) {
-            val hasCredentials =
-                UserPreferences.getProviderCache(HdFullProvider, "username").isNotBlank() &&
-                    UserPreferences.getProviderCache(HdFullProvider, "password").isNotBlank()
-
-            if (!hasCredentials) {
-                if (!reportedMissingHdFullCredentials.getAndSet(true)) {
-                    _state.emit(
-                        State.FailedLoading(
-                            IllegalStateException(
-                                "HdFull requires a saved username and password in provider settings."
-                            )
+            if (!provider.hasConfiguredCredentials()) {
+                _state.emit(
+                    State.FailedLoading(
+                        IllegalStateException(
+                            "HdFull requires a saved username and password in provider settings."
                         )
                     )
-                }
+                )
                 isLoadingHome.set(false)
                 return@launch
             }
-
-            reportedMissingHdFullCredentials.set(false)
         }
 
         if (provider is HdFullProvider) {

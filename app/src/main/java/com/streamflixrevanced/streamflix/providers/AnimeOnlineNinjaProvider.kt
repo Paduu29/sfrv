@@ -52,6 +52,8 @@ object AnimeOnlineNinjaProvider : Provider {
     private const val MAIN_HOST = "ww3.animeonline.ninja"
     internal val cronetHost: String get() = MAIN_HOST
     private const val DOCUMENT_CACHE_TTL_MS = 2 * 60 * 1000L
+    private const val CLEARANCE_PREFS = "anime_online_ninja_clearance"
+    private const val CLEARANCE_TOKEN_KEY = "cf_clearance"
 
     private val providerMutex = Mutex()
     private var webViewResolver: WebViewResolver? = null
@@ -62,7 +64,9 @@ object AnimeOnlineNinjaProvider : Provider {
     fun init(context: Context) {
         webViewResolver = WebViewResolver(context)
         AnimeOnlineNinjaCronetClient.init(context)
+        restorePersistedClearance(context)
         syncClearanceCookieState()
+        persistCurrentClearance(context)
     }
 
     fun reload() {
@@ -140,11 +144,36 @@ object AnimeOnlineNinjaProvider : Provider {
             getResolver().getResult(
                 url = url,
                 headers = pageHeaders(referer).minus("Cookie"),
+                // Challenge pages are rendered at desktop scale on some Android WebView
+                // builds. Keep this override local to Anime Online Ninja; other resolver users
+                // retain the shared defaults.
+                initialScale = 60,
+                pageZoom = "0.60",
+                nativeResourceHosts = { resourceUrl ->
+                    runCatching {
+                        val host = URL(resourceUrl).host
+                        host.equals(MAIN_HOST, ignoreCase = true) ||
+                            host.endsWith(".animeonline.ninja", ignoreCase = true) ||
+                            host.equals("challenges.cloudflare.com", ignoreCase = true)
+                    }.getOrDefault(false)
+                },
                 completion = { currentUrl, html, cookies ->
-                    val newClearance = clearanceToken(cookies)
+                    // CookieManager.getCookie can briefly lag the callback URL (especially when
+                    // Turnstile runs in a cross-origin iframe). Flush and inspect the provider
+                    // origins before deciding that the challenge failed.
+                    CookieManager.getInstance().flush()
+                    val observedCookies = listOf(
+                        cookies,
+                        CookieManager.getInstance().getCookie(currentUrl),
+                        CookieManager.getInstance().getCookie(SITE_BASE_URL),
+                        CookieManager.getInstance().getCookie(baseUrl),
+                    ).mapNotNull { it?.trim()?.takeIf(String::isNotBlank) }
+                        .distinct()
+                        .joinToString("; ")
+                    val newClearance = clearanceToken(observedCookies)
                     val hasClearance = !newClearance.isNullOrBlank()
                     val hasUsableContent = hasUsableSiteContent(html, currentUrl)
-                    if (hasClearance) promoteClearanceCookieHeader(cookies)
+                    if (hasClearance) promoteClearanceCookieHeader(observedCookies)
                     Log.d(
                         TAG,
                         "WebView challenge poll -> url=$currentUrl clearance=$hasClearance " +
@@ -161,7 +190,10 @@ object AnimeOnlineNinjaProvider : Provider {
                     runCatching {
                         val target = URL(targetUrl)
                         target.host.equals(MAIN_HOST, ignoreCase = true) ||
-                                target.path.contains("/cdn-cgi/", ignoreCase = true)
+                                target.host.endsWith(".animeonline.ninja", ignoreCase = true) ||
+                                target.host.equals("challenges.cloudflare.com", ignoreCase = true) ||
+                                (target.host.equals(MAIN_HOST, ignoreCase = true) &&
+                                        target.path.contains("/cdn-cgi/", ignoreCase = true))
                     }.getOrDefault(false)
                 },
             )
@@ -190,6 +222,8 @@ object AnimeOnlineNinjaProvider : Provider {
             cookieManager.setCookie(target, "cf_clearance=; Max-Age=0; Path=/; Secure")
         }
         cookieManager.flush()
+        StreamFlixApp.instance.getSharedPreferences(CLEARANCE_PREFS, Context.MODE_PRIVATE)
+            .edit().remove(CLEARANCE_TOKEN_KEY).apply()
 
         clearanceCookieHeader = clearanceCookieHeader
             ?.split(';')
@@ -1337,6 +1371,27 @@ object AnimeOnlineNinjaProvider : Provider {
 
         reload()
         clearanceCookieHeader = normalized
+        clearanceToken(normalized)?.let { token ->
+            StreamFlixApp.instance.getSharedPreferences(CLEARANCE_PREFS, Context.MODE_PRIVATE)
+                .edit().putString(CLEARANCE_TOKEN_KEY, token).apply()
+        }
+    }
+
+    private fun restorePersistedClearance(context: Context) {
+        val token = context.getSharedPreferences(CLEARANCE_PREFS, Context.MODE_PRIVATE)
+            .getString(CLEARANCE_TOKEN_KEY, null)?.trim().orEmpty()
+        if (token.isBlank()) return
+        CookieManager.getInstance().apply {
+            setCookie(SITE_BASE_URL, "cf_clearance=$token; Path=/; Secure; HttpOnly")
+            flush()
+        }
+    }
+
+    private fun persistCurrentClearance(context: Context) {
+        val token = clearanceToken(CookieManager.getInstance().getCookie(SITE_BASE_URL))
+            ?: return
+        context.getSharedPreferences(CLEARANCE_PREFS, Context.MODE_PRIVATE)
+            .edit().putString(CLEARANCE_TOKEN_KEY, token).apply()
     }
 
     private fun logFailure(operation: String, url: String, error: Throwable) {

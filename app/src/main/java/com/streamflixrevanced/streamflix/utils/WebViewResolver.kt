@@ -134,6 +134,9 @@ class WebViewResolver(private val context: Context) {
         shouldAllowNavigation: ((url: String, isMainFrame: Boolean) -> Boolean)? = null,
         pageReadyScriptProvider: ((currentUrl: String, html: String, cookies: String) -> String?)? = null,
         showImmediately: Boolean = false,
+        initialScale: Int = INITIAL_SCALE,
+        pageZoom: String = PAGE_ZOOM,
+        nativeResourceHosts: ((url: String) -> Boolean)? = null,
     ): String {
         return getResult(
             url,
@@ -142,7 +145,11 @@ class WebViewResolver(private val context: Context) {
             shouldAllowNavigation,
             null,
             pageReadyScriptProvider,
-            showImmediately
+            showImmediately,
+            false,
+            initialScale,
+            pageZoom,
+            nativeResourceHosts
         ).html
     }
 
@@ -155,6 +162,9 @@ class WebViewResolver(private val context: Context) {
         pageReadyScriptProvider: ((currentUrl: String, html: String, cookies: String) -> String?)? = null,
         showImmediately: Boolean = false,
         requireEvaluatedValue: Boolean = false,
+        initialScale: Int = INITIAL_SCALE,
+        pageZoom: String = PAGE_ZOOM,
+        nativeResourceHosts: ((url: String) -> Boolean)? = null,
     ): Result = mutex.withLock {
         Log.d(TAG, "[WebView] Fetching: $url (IsTV: $isTv)")
         pollingCount = 0
@@ -171,6 +181,9 @@ class WebViewResolver(private val context: Context) {
                         pageReadyScriptProvider,
                         showImmediately,
                         requireEvaluatedValue,
+                        initialScale,
+                        pageZoom,
+                        nativeResourceHosts,
                         continuation
                     )
                 }
@@ -194,6 +207,9 @@ class WebViewResolver(private val context: Context) {
         pageReadyScriptProvider: ((currentUrl: String, html: String, cookies: String) -> String?)?,
         showImmediately: Boolean,
         requireEvaluatedValue: Boolean,
+        initialScale: Int,
+        pageZoom: String,
+        nativeResourceHosts: ((url: String) -> Boolean)?,
         continuation: kotlinx.coroutines.CancellableContinuation<Result>
     ) {
         webView = WebView(context).apply {
@@ -225,7 +241,7 @@ class WebViewResolver(private val context: Context) {
                 javaScriptCanOpenWindowsAutomatically = false
                 setSupportMultipleWindows(false)
             }
-            setInitialScale(INITIAL_SCALE)
+            setInitialScale(initialScale.coerceIn(10, 200))
 
             CookieManager.getInstance().setAcceptCookie(true)
             CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
@@ -265,6 +281,7 @@ class WebViewResolver(private val context: Context) {
                     // state. Replaying its resources through OkHttp can make
                     // the widget report a failed verification.
                     if (isCloudflareRequest(requestUrl)) return null
+                    if (nativeResourceHosts?.invoke(requestUrl) == true) return null
                     return request?.let(::loadThroughDoH)
                 }
 
@@ -304,7 +321,7 @@ class WebViewResolver(private val context: Context) {
                 override fun onPageFinished(view: WebView?, currentUrl: String?) {
                     Log.d(TAG, "[WebView] onPageFinished: $currentUrl")
                     view?.evaluateJavascript(POPUP_BLOCKER_SCRIPT, null)
-                    applyMobilePageZoomOnce(view, currentUrl)
+                    applyMobilePageZoomOnce(view, currentUrl, pageZoom)
                     mainHandler.postDelayed({
                         if (webView != null) {
                             checkChallengeStatus(
@@ -405,13 +422,13 @@ class WebViewResolver(private val context: Context) {
         )
     }
 
-    private fun applyMobilePageZoomOnce(view: WebView?, currentUrl: String?) {
+    private fun applyMobilePageZoomOnce(view: WebView?, currentUrl: String?, pageZoom: String) {
         if (view == null || currentUrl.isNullOrBlank() || lastMobileZoomUrl == currentUrl) return
         lastMobileZoomUrl = currentUrl
         view.evaluateJavascript(
             """
                 (function() {
-                    const zoom = '$PAGE_ZOOM';
+                    const zoom = '$pageZoom';
                     document.documentElement.style.zoom = zoom;
                     if (document.body) {
                         document.body.style.zoom = zoom;
@@ -435,6 +452,9 @@ class WebViewResolver(private val context: Context) {
         if (continuation.isCompleted || webView == null) return
 
         val cookieManager = CookieManager.getInstance()
+        // WebView may persist Set-Cookie asynchronously. Flush before reading so callers that
+        // use the callback result (not just the rendered HTML) observe newly issued clearance.
+        cookieManager.flush()
         val cookies = cookieManager.getCookie(currentUrl) ?: ""
         val hasClearance = cookies.contains("cf_clearance")
 
