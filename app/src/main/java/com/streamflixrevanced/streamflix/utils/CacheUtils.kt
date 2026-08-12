@@ -12,6 +12,19 @@ import java.io.File
 object CacheUtils {
     private const val TAG = "CacheUtils"
 
+    /**
+     * Memory-pressure cleanup only. This must not touch WebView cookies, storage, or
+     * instantiate a WebView: Cloudflare sessions can be active while the app is
+     * backgrounded.
+     */
+    fun clearMemoryCache(context: Context) {
+        try {
+            Glide.get(context).clearMemory()
+        } catch (e: Exception) {
+            Log.e(TAG, "Errore pulizia memoria Glide: ${e.message}")
+        }
+    }
+
     fun clearAppCache(context: Context) {
         Log.d(TAG, "Inizio pulizia cache completa...")
         try {
@@ -83,7 +96,8 @@ object CacheUtils {
         
         if (currentSize > thresholdBytes) {
             Log.i(TAG, "Soglia superata! Avvio pulizia automatica...")
-            clearAppCache(context)
+            // Automatic cleanup must not invalidate an in-flight WebView session.
+            clearMemoryCache(context)
         } else {
             Log.d(TAG, "Soglia non raggiunta. Nessuna pulizia necessaria.")
         }

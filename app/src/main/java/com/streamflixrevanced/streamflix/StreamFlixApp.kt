@@ -117,7 +117,10 @@ class StreamFlixApp : Application() {
     override fun onTrimMemory(level: Int) {
         super.onTrimMemory(level)
         if (level >= TRIM_MEMORY_RUNNING_LOW) {
-            CacheUtils.clearAppCache(this)
+            // Do not clear WebView cookies/storage here. Cloudflare may be using
+            // the resolver while the process is backgrounded, and clearAppCache()
+            // would create/destroy a second WebView and invalidate that session.
+            CacheUtils.clearMemoryCache(this)
         }
     }
 }

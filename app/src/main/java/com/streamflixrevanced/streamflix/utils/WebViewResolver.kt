@@ -384,8 +384,17 @@ class WebViewResolver(private val context: Context) {
     }
 
     private fun isCloudflareRequest(url: String): Boolean {
-        val host = runCatching { Uri.parse(url).host.orEmpty().lowercase() }.getOrDefault("")
-        return host == "cloudflare.com" || host.endsWith(".cloudflare.com")
+        val parsed = runCatching { Uri.parse(url) }.getOrNull() ?: return false
+        val host = parsed.host.orEmpty().lowercase()
+        val path = parsed.path.orEmpty().lowercase()
+
+        // Cloudflare also serves the challenge bootstrap and clearance endpoint from the
+        // protected site's own /cdn-cgi/ path (for example hdfull.one). These requests must
+        // remain inside WebView: routing them through OkHttp loses WebView's challenge session
+        // and Set-Cookie handling, so cf_clearance is never produced.
+        return host == "cloudflare.com" ||
+            host.endsWith(".cloudflare.com") ||
+            path.startsWith("/cdn-cgi/")
     }
 
     private fun emptyBlockedResponse(): WebResourceResponse {

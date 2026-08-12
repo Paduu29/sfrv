@@ -645,17 +645,27 @@ object HdFullProvider : Provider {
             headers = authHeaders(baseUrl).filterKeys { !it.equals("Cookie", ignoreCase = true) },
             shouldAllowNavigation = { navigationUrl, _ -> isAllowedHdFullAuthNavigation(navigationUrl) },
             completion = { currentUrl, html, cookies ->
+                val hasClearance = cookies.split(';').any {
+                    it.trim().startsWith("cf_clearance=", ignoreCase = true)
+                } || cookieHeaderForLogging(currentUrl).split(';').any {
+                    it.trim().startsWith("cf_clearance=", ignoreCase = true)
+                }
+
                 !looksLikeCloudflarePage(html, currentUrl) &&
                     currentUrl.contains("hdfull", ignoreCase = true) &&
                     html.length > 500 &&
-                    (cookies.contains("cf_clearance=") ||
-                        cookieHeaderForLogging(currentUrl).contains("cf_clearance=") ||
-                        !html.contains("challenge-platform", ignoreCase = true))
+                    hasClearance
             },
         )
         synchronizeCookies(result.finalUrl)
-        check(!looksLikeCloudflarePage(result.html, result.finalUrl ?: url)) {
-            "HdFull Cloudflare clearance failed"
+        check(hasHdFullClearanceCookie(result.finalUrl ?: url)) {
+            "HdFull Cloudflare clearance cookie was not obtained"
+        }
+    }
+
+    private fun hasHdFullClearanceCookie(url: String): Boolean {
+        return cookieHeaderForLogging(url).split(';').any {
+            it.trim().startsWith("cf_clearance=", ignoreCase = true)
         }
     }
 
