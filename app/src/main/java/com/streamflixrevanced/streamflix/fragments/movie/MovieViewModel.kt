@@ -98,9 +98,12 @@ class MovieViewModel(id: String, private val database: AppDatabase) : ViewModel(
 
         try {
             val movie = UserPreferences.currentProvider!!.getMovie(id)
+            Log.d("MovieViewModel", "Provider rating for $id: ${movie.rating}")
 
             database.movieDao().getById(id)?.let { movieDb ->
+                Log.d("MovieViewModel", "Database rating for $id: ${movieDb.rating}")
                 movie.merge(movieDb)
+                Log.d("MovieViewModel", "Merged rating for $id: ${movie.rating}")
             }
             database.movieDao().insert(movie)
 

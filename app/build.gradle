@@ -28,17 +28,14 @@ android {
 
     defaultConfig {
         applicationId "com.streamflixrevanced.streamflix"
-        minSdk 21
+        minSdk 24
         targetSdk 35
         versionCode 250
         versionName "2.0.4"
 
         buildConfigField "String", "APP_LAYOUT", "\"${properties.getProperty("APP_LAYOUT")}\""
         buildConfigField "String", "TMDB_API_KEY", "\"${properties.getProperty("TMDB_API_KEY")}\""
-        // Optional comma-separated build-time pool. TMDB_API_KEY remains the
-        // existing single-key configuration and is intentionally independent.
         buildConfigField "String", "TMDB_API_KEYS", "\"${properties.getProperty("TMDB_API_KEYS") ?: ""}\""
-        buildConfigField "String", "SUBDL_API_KEY", "\"${properties.getProperty("SUBDL_API_KEY")}\""
         buildConfigField "String", "RABBITSTREAM_SOURCE_API", "\"${properties.getProperty("RABBITSTREAM_SOURCE_API")}\""
     }
 
@@ -79,6 +76,12 @@ android {
         viewBinding true
         buildConfig true
     }
+
+    packagingOptions {
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
 }
 
 dependencies {
@@ -118,7 +121,7 @@ dependencies {
     implementation 'androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.7'
     implementation 'androidx.preference:preference-ktx:1.2.1'
     implementation 'androidx.leanback:leanback-preference:1.2.0'
-    implementation 'org.chromium.net:cronet-embedded:119.6045.31'
+    implementation 'org.chromium.net:cronet-embedded:500.0.1'
     implementation 'androidx.tvprovider:tvprovider:1.1.0'
 
     implementation "androidx.room:room-runtime:2.7.0-rc01"
@@ -135,7 +138,7 @@ dependencies {
     implementation "io.github.jan-tennert.supabase:storage-kt"
     implementation "io.ktor:ktor-client-okhttp:3.2.2"
     testImplementation "junit:junit:4.13.2"
-    implementation 'org.conscrypt:conscrypt-android:2.5.2'
+    implementation 'org.conscrypt:conscrypt-android:2.6.2'
     implementation "androidx.browser:browser:1.7.0"
     implementation "org.nanohttpd:nanohttpd:2.3.1"
     implementation "com.google.zxing:core:3.5.1"

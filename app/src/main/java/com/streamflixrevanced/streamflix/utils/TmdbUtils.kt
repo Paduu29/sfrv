@@ -212,14 +212,14 @@ object TmdbUtils {
      */
     suspend fun enrichMovie(movie: Movie, language: String? = null): Movie {
         val tmdbMovie = getMovie(movie.title, language = language)
-            ?: return movie.copy(rating = null)
+            ?: return movie
         return movie.copy(
             title = tmdbMovie.title.ifBlank { movie.title },
             overview = tmdbMovie.overview.takeUnless { it.isNullOrBlank() } ?: movie.overview,
             released = tmdbMovie.released?.format("yyyy-MM-dd") ?: movie.released?.format("yyyy-MM-dd"),
             runtime = tmdbMovie.runtime ?: movie.runtime,
             trailer = tmdbMovie.trailer ?: movie.trailer,
-            rating = tmdbMovie.rating,
+            rating = tmdbMovie.rating?.takeIf { it > 0.0 } ?: movie.rating,
             poster = tmdbMovie.poster ?: movie.poster,
             banner = tmdbMovie.banner ?: movie.banner,
             imdbId = tmdbMovie.imdbId ?: movie.imdbId,
@@ -236,7 +236,7 @@ object TmdbUtils {
             .replace(Regex("\\s+S\\d+.*", RegexOption.IGNORE_CASE), "")
             .trim()
         val tmdbShow = getTvShow(lookupTitle, language = language)
-            ?: return tvShow.copy(rating = null)
+            ?: return tvShow
         val tmdbSeasonsByNumber = tmdbShow.seasons.associateBy { it.number }
         val seasons = if (tvShow.seasons.isEmpty()) {
             tmdbShow.seasons.onEach { season ->
@@ -258,7 +258,7 @@ object TmdbUtils {
             released = tmdbShow.released?.format("yyyy-MM-dd") ?: tvShow.released?.format("yyyy-MM-dd"),
             runtime = tmdbShow.runtime ?: tvShow.runtime,
             trailer = tmdbShow.trailer ?: tvShow.trailer,
-            rating = tmdbShow.rating,
+            rating = tmdbShow.rating?.takeIf { it > 0.0 } ?: tvShow.rating,
             poster = tmdbShow.poster ?: tvShow.poster,
             banner = tmdbShow.banner ?: tvShow.banner,
             imdbId = tmdbShow.imdbId ?: tvShow.imdbId,

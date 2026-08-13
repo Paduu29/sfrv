@@ -105,6 +105,7 @@ class TvShow(
 
     fun merge(tvShow: TvShow): TvShow {
         if (imdbId.isNullOrBlank()) imdbId = tvShow.imdbId
+        if (rating == null || rating == 0.0) rating = tvShow.rating
         this.isFavorite = tvShow.isFavorite
         this.favoritedAtMillis = tvShow.favoritedAtMillis
         this.isWatching = tvShow.isWatching

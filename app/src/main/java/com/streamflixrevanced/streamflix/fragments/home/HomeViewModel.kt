@@ -620,16 +620,7 @@ class HomeViewModel : ViewModel() {
     }
 
     private fun categoriesWithoutProviderRatings(categories: List<Category>): List<Category> {
-        if (!UserPreferences.enableTmdb) return categories
-        return categories.map { category ->
-            category.mapItemsPreservingInstance { item ->
-                when (item) {
-                    is Movie -> if (item.rating == null) item else item.copy(rating = null)
-                    is TvShow -> if (item.rating == null) item else item.copy(rating = null)
-                    else -> item
-                }
-            }
-        }
+        return categories
     }
 
     private fun refreshHomeRatings(provider: Provider, categories: List<Category>): Job =

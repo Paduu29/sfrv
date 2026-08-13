@@ -183,7 +183,8 @@ interface Provider {
             HuhuProvider("fr") to ProviderSupport(movies = false, tvShows = true, liveTv = true),
             HuhuProvider("es") to ProviderSupport(movies = false, tvShows = true, liveTv = true),
             HuhuProvider("pl") to ProviderSupport(movies = false, tvShows = true, liveTv = true),
-            HuhuProvider("ro") to ProviderSupport(movies = false, tvShows = true, liveTv = true)
+            HuhuProvider("ro") to ProviderSupport(movies = false, tvShows = true, liveTv = true),
+            FilmoProvider to ProviderSupport(movies = true, tvShows = false)
         )
 
         // Helper functions to check support

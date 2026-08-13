@@ -91,9 +91,6 @@ class MoviesViewModel(private val database: AppDatabase) : ViewModel() {
             val provider = UserPreferences.currentProvider!!
             val movies = ParentalControlUtils.filterItems(provider.getMovies())
                 .filterIsInstance<Movie>()
-                .map { movie ->
-                    if (UserPreferences.enableTmdb) movie.copy(rating = null) else movie
-                }
 
             page = 1
 
@@ -114,9 +111,6 @@ class MoviesViewModel(private val database: AppDatabase) : ViewModel() {
                 val provider = UserPreferences.currentProvider!!
                 val movies = ParentalControlUtils.filterItems(provider.getMovies(page + 1))
                     .filterIsInstance<Movie>()
-                    .map { movie ->
-                        if (UserPreferences.enableTmdb) movie.copy(rating = null) else movie
-                    }
 
                 page += 1
 
