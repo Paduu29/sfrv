@@ -62,6 +62,7 @@ class Movie(
 
     fun merge(movie: Movie): Movie {
         if (imdbId.isNullOrBlank()) imdbId = movie.imdbId
+        if (rating == null || rating == 0.0) rating = movie.rating
         this.isFavorite = movie.isFavorite
         this.favoritedAtMillis = movie.favoritedAtMillis
         this.isWatched = movie.isWatched

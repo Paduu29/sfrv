@@ -141,11 +141,11 @@ object HdFullCronetClient {
 
             override fun onFailed(
                 request: UrlRequest,
-                info: UrlResponseInfo?,
+                info: UrlResponseInfo,
                 error: CronetException,
             ) = complete(Result.failure(error))
 
-            override fun onCanceled(request: UrlRequest, info: UrlResponseInfo?) = Unit
+            override fun onCanceled(request: UrlRequest, info: UrlResponseInfo) = Unit
         }
 
         val builder = engine(context).newUrlRequestBuilder(url, requestCallback, executor)

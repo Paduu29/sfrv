@@ -107,9 +107,6 @@ class TvShowsViewModel(private val database: AppDatabase) : ViewModel() {
             }
             val tvShows = ParentalControlUtils.filterItems(provider.getTvShows())
                 .filterIsInstance<TvShow>()
-                .map { tvShow ->
-                    if (UserPreferences.enableTmdb) tvShow.copy(rating = null) else tvShow
-                }
 
             page = 1
 
@@ -131,9 +128,6 @@ class TvShowsViewModel(private val database: AppDatabase) : ViewModel() {
                 if (Provider.supportsLiveTv(provider)) return@launch
                 val tvShows = ParentalControlUtils.filterItems(provider.getTvShows(page + 1))
                     .filterIsInstance<TvShow>()
-                    .map { tvShow ->
-                        if (UserPreferences.enableTmdb) tvShow.copy(rating = null) else tvShow
-                    }
 
                 page += 1
 
