@@ -31,7 +31,6 @@ import com.streamflixrevanced.streamflix.utils.UserPreferences
 import com.streamflixrevanced.streamflix.utils.format
 import com.streamflixrevanced.streamflix.utils.combine
 import com.streamflixrevanced.streamflix.providers.HdFullProvider
-import com.streamflixrevanced.streamflix.providers.MkissaProvider
 import com.streamflixrevanced.streamflix.utils.LiveChannelMetadata
 import com.streamflixrevanced.streamflix.utils.TmdbUtils
 import kotlinx.coroutines.channels.Channel
@@ -777,7 +776,6 @@ class HomeViewModel : ViewModel() {
             val cachedCategories = HomeCacheStore.read(appContext, provider)
                 ?: HomeCacheStore.readLegacy(appContext, provider)
             val deferCachedHome =
-                provider === MkissaProvider ||
                 provider === AnimeOnlineNinjaProvider &&
                         !AnimeOnlineNinjaProvider.hasCurrentClearanceCookie() ||
                 Provider.supportsLiveTv(provider)
