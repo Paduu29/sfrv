@@ -1,5 +1,6 @@
 package com.streamflixrevanced.streamflix.providers
 
+import android.util.Log
 import com.streamflixrevanced.streamflix.adapters.AppAdapter
 import com.streamflixrevanced.streamflix.extractors.Extractor
 import com.streamflixrevanced.streamflix.models.Category
@@ -117,43 +118,43 @@ object FilmoProvider : Provider {
         .build()
         .create(Service::class.java)
 
-override suspend fun getHome(): List<Category> {
-    val document = service.page(baseUrl)
+    override suspend fun getHome(): List<Category> {
+        val document = service.page(baseUrl)
 
-    return document
-        .select(".video-row")
-        .mapNotNull { row ->
+        return document
+            .select(".video-row")
+            .mapNotNull { row ->
 
-            val heading = row
-                .selectFirst(
-                    "h2:has(a[href*=/collections/]), " +
-                            "h3:has(a[href*=/collections/])"
+                val heading = row
+                    .selectFirst(
+                        "h2:has(a[href*=/collections/]), " +
+                                "h3:has(a[href*=/collections/])"
+                    )
+                    ?: return@mapNotNull null
+
+                val title = heading
+                    .ownText()
+                    .trim()
+                    .replace(Regex("\\s+"), " ")
+                    .takeIf { text -> text.isNotBlank() }
+                    ?: return@mapNotNull null
+
+                val movies = row
+                    .select("a.video-card[href*=/movies/]")
+                    .mapNotNull(::parseVideoCard)
+                    .distinctBy { movie -> movie.id }
+
+                if (movies.isEmpty()) {
+                    return@mapNotNull null
+                }
+
+                Category(
+                    title,
+                    movies
                 )
-                ?: return@mapNotNull null
-
-            val title = heading
-                .ownText()
-                .trim()
-                .replace(Regex("\\s+"), " ")
-                .takeIf { text -> text.isNotBlank() }
-                ?: return@mapNotNull null
-
-            val movies = row
-                .select("a.video-card[href*=/movies/]")
-                .mapNotNull(::parseVideoCard)
-                .distinctBy { movie -> movie.id }
-
-            if (movies.isEmpty()) {
-                return@mapNotNull null
             }
-
-            Category(
-                title,
-                movies
-            )
-        }
-        .distinctBy { category -> category.name }
-}
+            .distinctBy { category -> category.name }
+    }
 
     override suspend fun search(
         query: String,
@@ -276,9 +277,9 @@ override suspend fun getHome(): List<Category> {
             .select("span.ft-meta-label, .ft-meta-definition-list dt")
             .firstOrNull {
                 val t = it.text()
-                t.contains("IMDb", ignoreCase = true) || 
-                t.contains("Bewertung", ignoreCase = true) ||
-                t.contains("Rating", ignoreCase = true)
+                t.contains("IMDb", ignoreCase = true) ||
+                        t.contains("Bewertung", ignoreCase = true) ||
+                        t.contains("Rating", ignoreCase = true)
             }
             ?.let { el ->
                 // Check current text, next sibling, and parent for the value
@@ -290,11 +291,11 @@ override suspend fun getHome(): List<Category> {
                     ?.replace(',', '.')
                     ?.toDoubleOrNull()
             } ?: Regex("""(?:IMDb|Bewertung)[:\s]*(\d+(?:[.,]\d+)?)""", RegexOption.IGNORE_CASE)
-                .find(document.text())
-                ?.groupValues
-                ?.get(1)
-                ?.replace(',', '.')
-                ?.toDoubleOrNull()
+            .find(document.text())
+            ?.groupValues
+            ?.get(1)
+            ?.replace(',', '.')
+            ?.toDoubleOrNull()
 
 
 
@@ -487,7 +488,7 @@ override suspend fun getHome(): List<Category> {
             )
 
         return document
-            .select(".provider-chip[data-p]")
+            .select(".provider-chip[data-p], [data-provider-chip][data-p]")
             .mapNotNull { chip ->
 
                 val payload = chip
@@ -532,11 +533,20 @@ override suspend fun getHome(): List<Category> {
                     language
                 ).joinToString(" • ")
 
-                val providerUrl = resolveFilmoServer(
-                    payload = payload,
-                    movieUrl = id,
-                    csrfToken = csrfToken
-                )
+                val providerUrl = try {
+                    resolveFilmoServer(
+                        payload = payload,
+                        movieUrl = id,
+                        csrfToken = csrfToken
+                    )
+                } catch (e: Exception) {
+                    Log.w(
+                        name,
+                        "Failed to resolve Filmo server '$serverName'",
+                        e
+                    )
+                    return@mapNotNull null
+                }
 
                 Video.Server(
                     id = providerUrl,
