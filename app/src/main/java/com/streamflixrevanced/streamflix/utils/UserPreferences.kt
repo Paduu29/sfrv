@@ -548,6 +548,13 @@ object UserPreferences {
         get() = Key.SUBTITLE_LANGUAGES.getStringSet() ?: setOf(SubtitleLanguageFilter.ALL)
         set(value) = Key.SUBTITLE_LANGUAGES.setStringSet(value)
 
+    var subtitleLanguagePriority: List<String>
+        get() = Key.SUBTITLE_LANGUAGE_PRIORITY.getString()
+            ?.split('|')
+            ?.filter { it.isNotBlank() }
+            .orEmpty()
+        set(value) = Key.SUBTITLE_LANGUAGE_PRIORITY.setString(value.distinct().joinToString("|"))
+
     fun getFavoriteCategoryOrder(providerName: String): List<String> {
         val key = "FAVORITE_CATEGORY_ORDER_$providerName"
         val saved = prefs.getString(key, null)
@@ -632,7 +639,8 @@ object UserPreferences {
         FAVORITE_PROVIDERS,
 
         PREFERRED_SUBTITLE_LANGUAGE,
-        SUBTITLE_LANGUAGES;
+        SUBTITLE_LANGUAGES,
+        SUBTITLE_LANGUAGE_PRIORITY;
 
         private fun getPrefs(): SharedPreferences {
             val up = UserPreferences

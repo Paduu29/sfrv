@@ -47,24 +47,47 @@ object SubtitleLanguageFilter {
     fun shouldSearch(selected: Set<String> = UserPreferences.subtitleLanguages): Boolean =
         selected.isNotEmpty()
 
+    fun orderedSelectedLanguages(
+        selected: Set<String> = UserPreferences.subtitleLanguages,
+        priority: List<String> = UserPreferences.subtitleLanguagePriority,
+    ): List<String> {
+        if (ALL in selected) return emptyList()
+        return (priority.filter { it in selected } + selected.filter { it !in priority }.sorted())
+            .distinct()
+    }
+
+    fun languageMatches(preferred: String?, label: String?, language: String? = null): Boolean {
+        if (preferred.isNullOrBlank()) return false
+        val preferredValue = normalize(preferred)
+        return listOfNotNull(label, language).any { candidate ->
+            val value = normalize(candidate)
+            value == preferredValue ||
+                value.startsWith("$preferredValue ") ||
+                value.startsWith("$preferredValue(") ||
+                value.substringBefore(" ") == preferredValue
+        }
+    }
+
     fun openSubtitlesLanguageIds(
         selected: Set<String> = UserPreferences.subtitleLanguages,
-    ): List<String>? =
-        selected
-            .takeUnless { ALL in it }
-            ?.mapNotNull { languages[it]?.openSubtitlesId }
-            ?.distinct()
-            ?.sorted()
+    ): List<String>? = if (ALL in selected) {
+        null
+    } else {
+        orderedSelectedLanguages(selected)
+            .mapNotNull { languages[it]?.openSubtitlesId }
+            .distinct()
+    }
 
-    fun subDlQuery(selected: Set<String> = UserPreferences.subtitleLanguages): String? =
-        selected
-            .takeUnless { ALL in it }
-            ?.filter { it in languages }
-            ?.map { it.uppercase() }
-            ?.distinct()
-            ?.sorted()
-            ?.takeIf { it.isNotEmpty() }
+    fun subDlQuery(selected: Set<String> = UserPreferences.subtitleLanguages): String? = if (ALL in selected) {
+        null
+    } else {
+        orderedSelectedLanguages(selected)
+            .filter { it in languages }
+            .map { it.uppercase() }
+            .distinct()
+            .takeIf { it.isNotEmpty() }
             ?.joinToString(",")
+    }
 
     fun allowsOpenSubtitle(
         subtitle: OpenSubtitles.Subtitle,

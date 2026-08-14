@@ -114,6 +114,11 @@
                 android:entries="@array/subtitle_language_names"
                 android:entryValues="@array/subtitle_language_values" />
 
+            <Preference
+                android:key="SUBTITLE_LANGUAGE_PRIORITY"
+                android:title="@string/settings_subtitle_language_priority_title"
+                android:summary="@string/settings_subtitle_language_priority_summary" />
+
             <ListPreference
                 android:key="preferred_player"
                 android:title="@string/settings_trailer_player_title"

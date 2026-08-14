@@ -2,6 +2,7 @@ package com.streamflixrevanced.streamflix.utils
 
 import android.content.Context
 import android.webkit.CookieManager
+import android.util.Log
 import kotlinx.coroutines.suspendCancellableCoroutine
 import org.chromium.net.CronetEngine
 import org.chromium.net.CronetException
@@ -24,6 +25,7 @@ import kotlin.coroutines.resumeWithException
  * requests, the Cloudflare WebView fallback, and image requests on one session.
  */
 object HdFullCronetClient {
+    private const val TAG = "HdFullCronet"
     private const val CACHE_SIZE_BYTES = 20L * 1024L * 1024L
     private const val READ_BUFFER_SIZE = 32 * 1024
 
@@ -94,7 +96,15 @@ object HdFullCronetClient {
         val output = ByteArrayOutputStream()
 
         fun complete(result: Result<Response>) {
-            if (!call.isCancelled() && completed.compareAndSet(false, true)) callback(result)
+            if (!call.isCancelled() && completed.compareAndSet(false, true)) {
+                result.onSuccess {
+                    Log.d(TAG, "Request completed -> method=$method url=$url status=${it.statusCode} " +
+                        "finalUrl=${it.finalUrl} bytes=${it.body.size}")
+                }.onFailure {
+                    Log.e(TAG, "Request failed -> method=$method url=$url", it)
+                }
+                callback(result)
+            }
         }
 
         val requestCallback = object : UrlRequest.Callback() {
@@ -103,11 +113,14 @@ object HdFullCronetClient {
                 info: UrlResponseInfo,
                 newLocationUrl: String,
             ) {
+                Log.d(TAG, "Redirect -> method=$method from=${info.url} to=$newLocationUrl status=${info.httpStatusCode}")
                 persistCookies(info)
                 request.followRedirect()
             }
 
             override fun onResponseStarted(request: UrlRequest, info: UrlResponseInfo) {
+                Log.d(TAG, "Response started -> method=$method url=$url status=${info.httpStatusCode} " +
+                    "finalUrl=${info.url}")
                 persistCookies(info)
                 request.read(ByteBuffer.allocateDirect(READ_BUFFER_SIZE))
             }
@@ -143,7 +156,10 @@ object HdFullCronetClient {
                 request: UrlRequest,
                 info: UrlResponseInfo,
                 error: CronetException,
-            ) = complete(Result.failure(error))
+            ) {
+                Log.e(TAG, "Cronet failure -> method=$method url=$url message=${error.message}", error)
+                complete(Result.failure(error))
+            }
 
             override fun onCanceled(request: UrlRequest, info: UrlResponseInfo) = Unit
         }

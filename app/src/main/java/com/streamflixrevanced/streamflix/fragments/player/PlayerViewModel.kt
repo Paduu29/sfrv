@@ -162,15 +162,29 @@ class PlayerViewModel(
                     throw IllegalStateException("No playable source returned by ${server.name}")
                 }
 
-                // Preserve a provider-selected subtitle. Otherwise, restore the user's subtitle
-                // preference except for Spanish providers, where forced tracks are provider-owned.
+                // Preserve a provider-selected subtitle. Otherwise restore the remembered
+                // language, including a regional variant such as Spanish (CR), when the exact
+                // track from the previous episode is unavailable.
                 val currentProviderLang = UserPreferences.currentProvider?.language ?: ""
                 val hasDefaultAlready = video.subtitles.any { it.default }
-                if (!hasDefaultAlready && currentProviderLang != "es") {
+                if (!hasDefaultAlready) {
                     if (!(video.useServerSubtitleSetting && UserPreferences.serverAutoSubtitlesDisabled)) {
-                        video.subtitles
-                            .firstOrNull { it.label.startsWith(UserPreferences.subtitleName ?: "") }
-                            ?.default = true
+                        val remembered = UserPreferences.subtitleName
+                        val rememberedSubtitle = video.subtitles.firstOrNull {
+                            SubtitleLanguageFilter.languageMatches(remembered, it.label)
+                        }
+                        val preferredSubtitle = if (rememberedSubtitle != null) {
+                            rememberedSubtitle
+                        } else if (currentProviderLang != "es") {
+                            video.subtitles.firstOrNull { subtitle ->
+                                SubtitleLanguageFilter.orderedSelectedLanguages().any { language ->
+                                    SubtitleLanguageFilter.languageMatches(language, subtitle.label)
+                                }
+                            }
+                        } else {
+                            null
+                        }
+                        preferredSubtitle?.default = true
                     }
                 }
 

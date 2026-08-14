@@ -395,6 +395,8 @@
     <string name="settings_auto_skip_intro">تخطي مقدمات الحلقات تلقائيًا</string>
     <string name="settings_auto_skip_intro_summary">استخدام توقيتات IntroDB لتخطي مقدمات حلقات المسلسلات المعروفة تلقائيًا</string>
     <string name="settings_subtitle_languages_title">لغات الترجمة</string>
+    <string name="settings_subtitle_language_priority_title">أولوية لغات الترجمة</string>
+    <string name="settings_subtitle_language_priority_summary">اختر لغة الترجمة المحددة المفضلة أولاً</string>
     <string name="settings_subtitle_languages_all">كل اللغات</string>
     <string name="settings_subtitle_languages_none">لم يتم تحديد أي لغة</string>
     <string name="voice_error_clear">مسح سجل البحث</string>

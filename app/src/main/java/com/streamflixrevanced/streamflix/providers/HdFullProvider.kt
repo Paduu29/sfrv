@@ -1,6 +1,7 @@
 package com.streamflixrevanced.streamflix.providers
 
 import android.content.Context
+import android.net.Uri
 import android.util.Base64
 import android.util.Log
 import android.webkit.CookieManager
@@ -47,6 +48,12 @@ object HdFullProvider : Provider {
     private const val CACHE_PASSWORD = "password"
     private const val CLEARANCE_PREFS = "hdfull_clearance"
     private const val CLEARANCE_TOKEN_KEY = "cf_clearance"
+    private val clearanceCookieUrls = listOf(
+        "https://hdfull.one/",
+        "https://www.hdfull.one/",
+        "https://hdfull.sbs/",
+        "https://www.hdfull.sbs/",
+    )
     private const val MISSING_CREDENTIALS_MESSAGE =
         "HdFull requires a saved username and password in provider settings."
     private val manualCompletionHosts = setOf(
@@ -597,7 +604,9 @@ object HdFullProvider : Provider {
             Log.d(TAG, "Reusing persisted HdFull Cloudflare clearance")
         }
 
+        Log.d(TAG, "Requesting HDFull login page through Cronet")
         var loginPage = executeRequest(loginUrl, authHeaders(baseUrl))
+        Log.d(TAG, "HDFull login page received -> status=${loginPage.code} finalUrl=${loginPage.finalUrl} bytes=${loginPage.body.length}")
         if (loginPage.code == 403 || looksLikeCloudflarePage(loginPage.body, loginPage.finalUrl)) {
             if (!reusedClearance) {
                 throw CloudflareTransportException(
@@ -647,6 +656,7 @@ object HdFullProvider : Provider {
                 "action" to "login",
             ),
         )
+        Log.d(TAG, "HDFull login submission received -> status=${response.code} finalUrl=${response.finalUrl} bytes=${response.body.length}")
         if (response.code == 403 || looksLikeCloudflarePage(response.body, response.finalUrl)) {
             throw CloudflareTransportException(
                 "HdFull blocked the native login submission after Cloudflare clearance",
@@ -683,6 +693,15 @@ object HdFullProvider : Provider {
             initialScale = 85,
             pageZoom = "0.85",
             shouldAllowNavigation = { navigationUrl, _ -> isAllowedHdFullAuthNavigation(navigationUrl) },
+            // Keep all HDFull first-party resources inside the same WebView network session.
+            // Routing these through the shared DoH/OkHttp interceptor loses WebView cookies,
+            // which prevents Turnstile from completing even though /cdn-cgi/ is native-loaded.
+            nativeResourceHosts = { resourceUrl ->
+                val host = runCatching { Uri.parse(resourceUrl).host.orEmpty() }
+                    .getOrDefault("")
+                    .lowercase(Locale.ROOT)
+                isHdFullSiteHost(host)
+            },
             completion = { currentUrl, html, cookies ->
                 CookieManager.getInstance().flush()
                 val observedCookies = listOf(
@@ -695,13 +714,20 @@ object HdFullProvider : Provider {
                 }
                 val newClearance = clearanceToken(observedCookies)
                 val isNewClearance = hasClearance && newClearance != rejectedClearance
+                val challengeStillRendered = listOf(
+                    "just a moment...",
+                    "cf-browser-verification",
+                    "challenge-running",
+                ).any { html.contains(it, ignoreCase = true) }
 
-                // Cloudflare can set cf_clearance before the challenge document navigates away
-                // from the challenge page. Waiting for non-challenge HTML here leaves the WebView
-                // polling forever even though the token is already available for native login.
+                // A new token can be written before Cloudflare has finished replacing the
+                // challenge document. Passing that provisional token to Cronet is rejected even
+                // though CookieManager already exposes cf_clearance. Wait for the challenge page
+                // to finish its navigation so the token and the browser session are established.
                 currentUrl.contains("hdfull", ignoreCase = true) &&
                     html.length > 500 &&
-                    isNewClearance
+                    isNewClearance &&
+                    !challengeStillRendered
             },
         )
         synchronizeCookies(result.finalUrl)
@@ -750,12 +776,46 @@ object HdFullProvider : Provider {
     }
 
     private fun clearPersistedClearance() {
-        CookieManager.getInstance().apply {
-            setCookie(baseUrl, "cf_clearance=; Max-Age=0; Path=/; Secure")
-            flush()
-        }
+        clearHdfullChallengeCookies()
         StreamFlixApp.instance.getSharedPreferences(CLEARANCE_PREFS, Context.MODE_PRIVATE)
             .edit().remove(CLEARANCE_TOKEN_KEY).apply()
+    }
+
+    /**
+     * Cloudflare clearance is host/domain scoped and WebView can retain several challenge
+     * cookies after a token has expired. Expire every HDFull challenge cookie before retrying;
+     * clearing only the base URL can leave a stale www/domain cookie in the shared WebView jar.
+     */
+    private fun clearHdfullChallengeCookies() {
+        val cookieManager = CookieManager.getInstance()
+        val cookieNames = clearanceCookieUrls
+            .flatMap { url ->
+                cookieManager.getCookie(url).orEmpty()
+                    .split(';')
+                    .map { it.substringBefore('=').trim() }
+            }
+            .filter { it.startsWith("cf_", ignoreCase = true) }
+            .distinct()
+
+        val expired = "Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Path=/; Secure"
+        clearanceCookieUrls.forEach { url ->
+            cookieNames.forEach { name ->
+                cookieManager.setCookie(url, "$name=; $expired")
+            }
+        }
+
+        // Also target the domain-cookie forms explicitly. Some WebView versions do not remove a
+        // Domain cookie when the deletion is sent only to the exact host URL.
+        listOf(".hdfull.one", ".hdfull.sbs").forEach { domain ->
+            cookieNames.forEach { name ->
+                cookieManager.setCookie(
+                    "https://${domain.removePrefix(".")}/",
+                    "$name=; Domain=$domain; $expired",
+                )
+            }
+        }
+        cookieManager.flush()
+        Log.d(TAG, "Cleared HDFull challenge cookies -> names=${cookieNames.ifEmpty { listOf("<none>") }.joinToString()}")
     }
 
     private suspend fun <T> retryWithAuthRecovery(

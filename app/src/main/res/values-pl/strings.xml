@@ -128,6 +128,8 @@
     <string name="settings_auto_skip_intro">Automatycznie pomijaj intra</string>
     <string name="settings_auto_skip_intro_summary">Używaj znaczników czasu IntroDB, aby automatycznie pomijać znane intra odcinków seriali</string>
     <string name="settings_subtitle_languages_title">Języki napisów</string>
+    <string name="settings_subtitle_language_priority_title">Priorytet języków napisów</string>
+    <string name="settings_subtitle_language_priority_summary">Wybierz, który zaznaczony język ma być preferowany</string>
     <string name="settings_subtitle_languages_all">Wszystkie języki</string>
     <string name="settings_subtitle_languages_none">Nie wybrano żadnego języka</string>
 

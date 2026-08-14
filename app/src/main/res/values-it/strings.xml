@@ -411,6 +411,8 @@
     <string name="settings_auto_skip_intro">Salta automaticamente le intro</string>
     <string name="settings_auto_skip_intro_summary">Usa i timestamp di IntroDB per saltare automaticamente le intro note degli episodi TV</string>
     <string name="settings_subtitle_languages_title">Lingue dei sottotitoli</string>
+    <string name="settings_subtitle_language_priority_title">Priorità delle lingue dei sottotitoli</string>
+    <string name="settings_subtitle_language_priority_summary">Scegli quale lingua selezionata preferire per prima</string>
     <string name="settings_subtitle_languages_all">Tutte le lingue</string>
     <string name="settings_subtitle_languages_none">Nessuna lingua selezionata</string>
     <string name="voice_error_clear">Cancella cronologia ricerche</string>
