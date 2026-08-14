@@ -99,7 +99,7 @@
     <string name="player_no_working_source_message">Obecnie nie ma żadnego działającego źródła odtwarzania.</string>
     <string name="player_source_status_title">Wyszukiwanie działającego źródła</string>
     <string name="player_source_status_step">%1$d / %2$d</string>
-    <string name="player_sources_loading_message">Sprawdzanie dostępnych dostawców i serwerów…</string>
+    <string name="player_sources_loading_message">Sprawdzanie dostępnych serwerów…</string>
     <string name="player_source_trying">Próba użycia %1$s…</string>
     <string name="player_source_retrying">%1$s nie działa. Ponawianie próby…</string>
     <string name="player_source_trying_next">%1$s nie działa. Próba użycia %2$s…</string>

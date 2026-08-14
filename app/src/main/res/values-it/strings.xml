@@ -123,7 +123,7 @@
     <string name="player_no_working_source_message">Al momento non sono disponibili sorgenti di riproduzione funzionanti.</string>
     <string name="player_source_status_title">Ricerca di una sorgente riproducibile</string>
     <string name="player_source_status_step">%1$d / %2$d</string>
-    <string name="player_sources_loading_message">Verifica di provider e server disponibili…</string>
+    <string name="player_sources_loading_message">Verifica dei server disponibili…</string>
     <string name="player_source_trying">Tentativo con %1$s…</string>
     <string name="player_source_retrying">%1$s non ha funzionato. Nuovo tentativo…</string>
     <string name="player_source_trying_next">%1$s non ha funzionato. Tentativo con %2$s…</string>

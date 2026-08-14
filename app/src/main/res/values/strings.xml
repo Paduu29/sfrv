@@ -180,7 +180,7 @@
     <string name="player_no_working_source_message">No working playback source is currently available.</string>
     <string name="player_source_status_title">Finding a playable source</string>
     <string name="player_source_status_step">%1$d / %2$d</string>
-    <string name="player_sources_loading_message">Checking available providers and servers…</string>
+    <string name="player_sources_loading_message">Checking available servers…</string>
     <string name="player_source_trying">Trying %1$s…</string>
     <string name="player_source_retrying">%1$s failed. Retrying…</string>
     <string name="player_source_trying_next">%1$s failed. Trying %2$s…</string>
