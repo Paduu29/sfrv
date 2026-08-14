@@ -121,7 +121,7 @@
     <string name="player_no_working_source_message">Aucune source de lecture fonctionnelle n’est actuellement disponible.</string>
     <string name="player_source_status_title">Recherche d’une source de lecture</string>
     <string name="player_source_status_step">%1$d / %2$d</string>
-    <string name="player_sources_loading_message">Vérification des fournisseurs et serveurs disponibles…</string>
+    <string name="player_sources_loading_message">Recherche des serveurs disponibles…</string>
     <string name="player_source_trying">Essai de %1$s…</string>
     <string name="player_source_retrying">%1$s a échoué. Nouvelle tentative…</string>
     <string name="player_source_trying_next">%1$s a échoué. Essai de %2$s…</string>

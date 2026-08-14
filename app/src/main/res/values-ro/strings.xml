@@ -125,7 +125,7 @@
     <string name="player_no_working_source_message">Momentan nu este disponibilă nicio sursă de redare funcțională.</string>
     <string name="player_source_status_title">Se caută o sursă de redare</string>
     <string name="player_source_status_step">%1$d / %2$d</string>
-    <string name="player_sources_loading_message">Se verifică furnizorii și serverele disponibile…</string>
+    <string name="player_sources_loading_message">Se verifică serverele disponibile…</string>
     <string name="player_source_trying">Se încearcă %1$s…</string>
     <string name="player_source_retrying">%1$s a eșuat. Se încearcă din nou…</string>
     <string name="player_source_trying_next">%1$s a eșuat. Se încearcă %2$s…</string>

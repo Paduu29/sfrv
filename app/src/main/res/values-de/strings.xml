@@ -121,7 +121,7 @@
     <string name="player_no_working_source_message">Derzeit ist keine funktionierende Wiedergabequelle verfügbar.</string>
     <string name="player_source_status_title">Wiedergabequelle wird gesucht</string>
     <string name="player_source_status_step">%1$d / %2$d</string>
-    <string name="player_sources_loading_message">Verfügbare Anbieter und Server werden geprüft…</string>
+    <string name="player_sources_loading_message">Verfügbare Server werden überprüft…</string>
     <string name="player_source_trying">Versuche %1$s…</string>
     <string name="player_source_retrying">%1$s ist fehlgeschlagen. Neuer Versuch…</string>
     <string name="player_source_trying_next">%1$s ist fehlgeschlagen. Versuche %2$s…</string>
