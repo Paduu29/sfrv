@@ -290,6 +290,8 @@
     <string name="settings_subtitle_languages_title">Subtitle languages</string>
     <string name="settings_subtitle_languages_all">All languages</string>
     <string name="settings_subtitle_languages_none">No languages selected</string>
+    <string name="settings_subtitle_language_priority_title">Subtitle language priority</string>
+    <string name="settings_subtitle_language_priority_summary">Choose which selected language is preferred first</string>
     <string name="player_settings_local_subtitles_label">Load from files</string>
     <string name="player_settings_speed_title">Video speed</string>
     <string name="player_settings_speed_label">Speed</string>

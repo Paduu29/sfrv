@@ -314,6 +314,8 @@
     <string name="settings_auto_skip_intro">Omitir intros automáticamente</string>
     <string name="settings_auto_skip_intro_summary">Usar las marcas de tiempo de IntroDB para omitir automáticamente las intros conocidas de los episodios</string>
     <string name="settings_subtitle_languages_title">Idiomas de los subtítulos</string>
+    <string name="settings_subtitle_language_priority_title">Prioridad de idiomas de subtítulos</string>
+    <string name="settings_subtitle_language_priority_summary">Elige qué idioma seleccionado se prefiere primero</string>
     <string name="settings_subtitle_languages_all">Todos los idiomas</string>
     <string name="settings_subtitle_languages_none">No hay idiomas seleccionados</string>
     <string name="voice_search">Búsqueda por voz</string>

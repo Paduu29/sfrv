@@ -396,6 +396,8 @@
     <string name="settings_auto_skip_intro">Intros automatisch überspringen</string>
     <string name="settings_auto_skip_intro_summary">IntroDB-Zeitstempel verwenden, um bekannte Intros von Serienepisoden automatisch zu überspringen</string>
     <string name="settings_subtitle_languages_title">Untertitelsprachen</string>
+    <string name="settings_subtitle_language_priority_title">Priorität der Untertitelsprachen</string>
+    <string name="settings_subtitle_language_priority_summary">Wähle die bevorzugte ausgewählte Sprache</string>
     <string name="settings_subtitle_languages_all">Alle Sprachen</string>
     <string name="settings_subtitle_languages_none">Keine Sprachen ausgewählt</string>
     <string name="voice_error_clear">Suchverlauf löschen</string>

@@ -323,6 +323,8 @@
     <string name="settings_auto_skip_intro">Omite automat introducerile</string>
     <string name="settings_auto_skip_intro_summary">Folosește marcajele temporale IntroDB pentru a omite automat introducerile cunoscute ale episoadelor TV</string>
     <string name="settings_subtitle_languages_title">Limbi pentru subtitrări</string>
+    <string name="settings_subtitle_language_priority_title">Prioritatea limbilor subtitrărilor</string>
+    <string name="settings_subtitle_language_priority_summary">Alege limba selectată preferată</string>
     <string name="settings_subtitle_languages_all">Toate limbile</string>
     <string name="settings_subtitle_languages_none">Nicio limbă selectată</string>
     <string name="voice_search">Căutare vocală</string>

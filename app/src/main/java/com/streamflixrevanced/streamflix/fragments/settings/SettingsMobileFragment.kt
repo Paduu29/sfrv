@@ -58,6 +58,8 @@ import com.streamflixrevanced.streamflix.utils.ParentalControlNotifier
 import com.streamflixrevanced.streamflix.utils.ThemeManager
 import com.streamflixrevanced.streamflix.utils.UserDataCache
 import com.streamflixrevanced.streamflix.utils.UserPreferences
+import com.streamflixrevanced.streamflix.utils.SubtitleLanguageFilter
+import com.streamflixrevanced.streamflix.utils.SubtitleLanguagePriorityDialog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -624,7 +626,40 @@ class SettingsMobileFragment : PreferenceFragmentCompat() {
                 }
                 values = normalized
                 UserPreferences.subtitleLanguages = normalized
+                UserPreferences.subtitleLanguagePriority =
+                    SubtitleLanguageFilter.orderedSelectedLanguages(normalized, UserPreferences.subtitleLanguagePriority)
                 false
+            }
+        }
+
+        findPreference<Preference>("SUBTITLE_LANGUAGE_PRIORITY")?.apply {
+            fun name(code: String): String = Locale.forLanguageTag(code)
+                .getDisplayLanguage(Locale.getDefault())
+                .replaceFirstChar { character ->
+                    if (character.isLowerCase()) character.titlecase(Locale.getDefault()) else character.toString()
+                }
+            fun refreshSummary() {
+                val selected = UserPreferences.subtitleLanguages
+                summary = if ("all" in selected || selected.isEmpty()) {
+                    getString(R.string.settings_subtitle_languages_all)
+                } else {
+                    SubtitleLanguageFilter.orderedSelectedLanguages(selected).joinToString { name(it) }
+                }
+            }
+            refreshSummary()
+            setOnPreferenceClickListener {
+                val selected = UserPreferences.subtitleLanguages
+                if ("all" !in selected && selected.isNotEmpty()) {
+                    SubtitleLanguagePriorityDialog.show(
+                        requireContext(),
+                        SubtitleLanguageFilter.orderedSelectedLanguages(selected),
+                        { code -> name(code) },
+                    ) { order ->
+                        UserPreferences.subtitleLanguagePriority = order
+                        refreshSummary()
+                    }
+                }
+                true
             }
         }
 

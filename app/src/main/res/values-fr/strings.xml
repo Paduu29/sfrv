@@ -429,6 +429,8 @@
     <string name="settings_auto_skip_intro">Passer automatiquement les intros</string>
     <string name="settings_auto_skip_intro_summary">Utiliser les horodatages d’IntroDB pour passer automatiquement les intros connues des épisodes de séries</string>
     <string name="settings_subtitle_languages_title">Langues des sous-titres</string>
+    <string name="settings_subtitle_language_priority_title">Priorité des langues des sous-titres</string>
+    <string name="settings_subtitle_language_priority_summary">Choisissez quelle langue sélectionnée est prioritaire</string>
     <string name="settings_subtitle_languages_all">Toutes les langues</string>
     <string name="settings_subtitle_languages_none">Aucune langue sélectionnée</string>
     <string name="voice_error_clear">Effacer l\'historique de recherche</string>

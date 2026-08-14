@@ -1252,13 +1252,17 @@ class PlayerTvFragment : Fragment() {
 
                         binding.pvPlayer.controller.binding.exoPlayPause.nextFocusDownId = -1
 
-                        val preferredSubLang = UserPreferences.preferredSubtitleLanguage
+                        val preferredSubLang = UserPreferences.subtitleName
+                            ?: UserPreferences.preferredSubtitleLanguage
                         if (!preferredSubLang.isNullOrEmpty()) {
                             val trackGroups = player.currentTracks.groups.filter { it.type == C.TRACK_TYPE_TEXT }
                             for (group in trackGroups) {
                                 for (i in 0 until group.length) {
                                     val format = group.getTrackFormat(i)
-                                    if (format.language.equals(preferredSubLang, ignoreCase = true)) {
+                                    if (format.language.equals(preferredSubLang, ignoreCase = true) ||
+                                        com.streamflixrevanced.streamflix.utils.SubtitleLanguageFilter
+                                            .languageMatches(preferredSubLang, format.label, format.language)
+                                    ) {
                                         player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
                                             .setOverrideForType(
                                                 androidx.media3.common.TrackSelectionOverride(

@@ -152,6 +152,12 @@
                 android:entryValues="@array/subtitle_language_values"
                 app:iconSpaceReserved="false" />
 
+            <Preference
+                android:key="SUBTITLE_LANGUAGE_PRIORITY"
+                android:title="@string/settings_subtitle_language_priority_title"
+                android:summary="@string/settings_subtitle_language_priority_summary"
+                app:iconSpaceReserved="false" />
+
             <ListPreference
                 android:key="preferred_player"
                 android:title="@string/settings_trailer_player_title"
