@@ -412,10 +412,10 @@ object MkissaProvider : Provider {
             }
             .flatMap { translation ->
                 val watchUrl = "$baseUrl/$showId/p-$episode-$translation"
-                resolveVisibleWatchPage(watchUrl).map { sourceUrl ->
+                resolveVisibleWatchPage(watchUrl).mapIndexed { index, sourceUrl ->
                     Video.Server(
                         id = sourceUrl,
-                        name = "MKissa ${translation.uppercase()}".trim(),
+                        name = "MKissa ${translation.uppercase()} ${index + 1}".trim(),
                         src = sourceUrl
                     )
                 }
@@ -424,6 +424,8 @@ object MkissaProvider : Provider {
 
     private suspend fun resolveVisibleWatchPage(pageUrl: String): List<String> {
         Log.d(TAG, "Opening visible Mkissa WebView: $pageUrl")
+        var previousLinks = emptyList<String>()
+        var stablePolls = 0
         val result = webViewResolver.getResult(
             url = pageUrl,
             headers = mapOf(
@@ -431,9 +433,21 @@ object MkissaProvider : Provider {
                 "Referer" to "$baseUrl/",
             ),
             showImmediately = true,
-            completion = { currentUrl, html, _ ->
-                !isCloudflareChallenge(html) &&
-                        extractWatchLinks(html, currentUrl).isNotEmpty()
+            completion = { currentUrl, html, cookies ->
+                val links = extractWatchLinks(html, currentUrl)
+                if (links == previousLinks && links.isNotEmpty()) {
+                    stablePolls++
+                } else {
+                    previousLinks = links
+                    stablePolls = if (links.isEmpty()) 0 else 1
+                }
+
+                // The solved page can still contain Turnstile's embedded markup. The
+                // resolver has already verified clearance through the cookie supplied here;
+                // wait for two identical snapshots so dynamically-added server links arrive.
+                links.isNotEmpty() &&
+                        (!isCloudflareChallenge(html) || cookies.contains("cf_clearance")) &&
+                        stablePolls >= 2
             },
         )
 
@@ -446,20 +460,41 @@ object MkissaProvider : Provider {
     private fun extractWatchLinks(html: String, baseUri: String): List<String> {
         if (html.isBlank()) return emptyList()
         val document = Jsoup.parse(html, baseUri)
-        return document.select(
+        val attributeLinks = document.select(
             "iframe[src], video[src], video[currentSrc], source[src], " +
-                    "a[href], [data-src], [data-url], [data-file]"
+                    "a[href], [data-src], [data-url], [data-file], [data-href], [data-link]"
         ).flatMap { element ->
-            listOf("src", "href", "currentSrc", "data-src", "data-url", "data-file")
+            listOf(
+                "src", "href", "currentSrc", "data-src", "data-url", "data-file",
+                "data-href", "data-link", "onclick"
+            )
                 .mapNotNull { attribute ->
                     val value = if (attribute == "src" || attribute == "href") {
                         element.absUrl(attribute)
                     } else {
-                        element.attr(attribute).trim()
+                        element.attr(attribute).trim().replace("\\/", "/")
                     }
-                    value.takeIf(::isWatchLink)
+                    extractUrls(value, baseUri)
                 }
-        }.distinct()
+                .flatten()
+        }
+        val scriptLinks = document.select("script").flatMap { script ->
+            extractUrls(script.data().replace("\\/", "/"), baseUri)
+        }
+        return (attributeLinks + scriptLinks).distinct()
+    }
+
+    private fun extractUrls(value: String, baseUri: String): List<String> {
+        val candidates = Regex("(?:https?:)?//[^\\\"'\\s<>]+|/[^\\\"'\\s<>]*player\\.html\\?[^\\\"'\\s<>]+")
+            .findAll(value)
+            .mapNotNull { match ->
+                Jsoup.parse("<a href=\"${match.value}\"></a>", baseUri)
+                    .select("a")
+                    .firstOrNull()
+                    ?.absUrl("href")
+            }
+            .toList()
+        return (candidates + value.takeIf(::isWatchLink).orEmpty()).filter(::isWatchLink)
     }
 
     private fun isCloudflareChallenge(html: String): Boolean {
