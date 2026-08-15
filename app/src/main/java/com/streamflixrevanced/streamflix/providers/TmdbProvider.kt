@@ -34,6 +34,7 @@ import com.streamflixrevanced.streamflix.utils.UserPreferences
 import com.streamflixrevanced.streamflix.utils.safeSubList
 import android.util.Base64
 import android.util.Log
+import com.streamflixrevanced.streamflix.extractors.VidsrcMeExtractor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -829,6 +830,7 @@ class TmdbProvider(override val language: String) : Provider {
                     VixSrcExtractor().server(videoType),
                     TwoEmbedExtractor().server(videoType),
                     VidsrcNetExtractor().server(videoType),
+                    VidsrcMeExtractor().server(videoType),
                     VidFastExtractor().server(videoType),
                     VidLinkExtractor().server(videoType),
                     VidsrcRuExtractor().server(videoType),

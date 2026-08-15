@@ -5,6 +5,7 @@ import com.streamflixrevanced.streamflix.models.Video
 import com.streamflixrevanced.streamflix.utils.NetworkClient
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import okio.ByteString.Companion.decodeBase64
 import org.json.JSONArray
 import org.json.JSONObject
@@ -95,7 +96,12 @@ class VideasyExtractor : Extractor() {
                     .setQueryParameter("seed", seed)
                     .build()
                     .toString())
-                return parseVideo(VideasyDecoder.decode(encrypted, seed, mediaId), sourceUrl.toString())
+                return parseVideo(
+                    VideasyDecoder.decode(encrypted, seed, mediaId),
+                    sourceUrl.toString(),
+                    seed,
+                    mediaId,
+                )
             } catch (error: UnauthorizedSeedException) {
                 lastError = error
             }
@@ -181,11 +187,11 @@ class VideasyExtractor : Extractor() {
         }
     }
 
-    private fun parseVideo(json: String, link: String): Video {
+    private fun parseVideo(json: String, link: String, seed: String, mediaId: Int): Video {
         val result = JSONObject(json)
         val sources = result.optJSONArray("sources") ?: JSONArray()
         val candidates = (0 until sources.length()).mapNotNull { index ->
-            sources.optJSONObject(index)?.takeIf { sourceUrl(it).isNotBlank() }
+            sources.optJSONObject(index)?.takeIf { sourceAvailable(it) }
         }
 
         val endpoint = link.toHttpUrl().pathSegments.firstOrNull()
@@ -199,8 +205,12 @@ class VideasyExtractor : Extractor() {
                 .ifEmpty { candidates }
             else -> candidates
         }
-        val source = filtered.firstOrNull() ?: throw Exception("No Videasy video source found")
-        val videoUrl = sourceUrl(source)
+        val source = candidates.firstOrNull { it.optBoolean("selected") }
+            ?: filtered.firstOrNull { it.optString("data").isNotBlank() }
+            ?: filtered.firstOrNull { sourceUrl(it).isNotBlank() }
+            ?: filtered.firstOrNull()
+            ?: throw Exception("No Videasy video source found")
+        val videoUrl = resolveSourceUrl(source, seed, mediaId)
 
         val subtitles = result.optJSONArray("subtitles")?.let { tracks ->
             (0 until tracks.length()).mapNotNull { index ->
@@ -230,12 +240,95 @@ class VideasyExtractor : Extractor() {
                 "Origin" to PLAYER_ORIGIN,
                 "Referer" to "$PLAYER_ORIGIN/",
                 "User-Agent" to NetworkClient.USER_AGENT,
+                "X-Requested-With" to "XMLHttpRequest",
             ),
         )
     }
 
     private fun sourceUrl(source: JSONObject): String =
         source.optString("url").ifBlank { source.optString("file") }
+
+    private fun sourceAvailable(source: JSONObject): Boolean =
+        source.optString("data").isNotBlank() || sourceUrl(source).isNotBlank()
+
+    private fun resolveSourceUrl(source: JSONObject, seed: String, mediaId: Int): String {
+        val data = source.optString("data")
+        if (data.isNotBlank()) {
+            val endpoint = "$PLAYER_ORIGIN/$STREAM_PATH/$data"
+            val body = executeStream(endpoint)
+            return runCatching { parseStreamBody(body, seed, mediaId) }
+                .getOrElse { endpoint }
+        }
+        return sourceUrl(source)
+    }
+
+    private fun executeStream(url: String): String {
+        val request = Request.Builder()
+            .url(url)
+            .post(ByteArray(0).toRequestBody())
+            .header("X-Requested-With", "XMLHttpRequest")
+            .header("Accept", "*/*")
+            .header("Origin", PLAYER_ORIGIN)
+            .header("Referer", "$PLAYER_ORIGIN/")
+            .header("User-Agent", NetworkClient.USER_AGENT)
+            .build()
+
+        return NetworkClient.default.newCall(request).execute().use { response ->
+            val body = response.body?.string().orEmpty()
+            if (!response.isSuccessful) {
+                throw Exception("Videasy stream request failed with HTTP ${response.code}")
+            }
+            body.takeIf(String::isNotBlank) ?: throw Exception("Videasy returned an empty stream response")
+        }
+    }
+
+    private fun parseStreamBody(body: String, seed: String, mediaId: Int): String {
+        val trimmed = body.trim().trim('"')
+        if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+            return trimmed
+        }
+        runCatching { JSONObject(trimmed) }.getOrNull()?.let { json ->
+            urlFromJson(json)?.let { return it }
+        }
+        runCatching { VideasyDecoder.decode(body, seed, mediaId) }
+            .getOrNull()
+            ?.let { decoded -> parseDecodedStream(decoded) }
+            ?.let { return it }
+        throw Exception("Videasy stream response could not be resolved to a playable URL")
+    }
+
+    private fun parseDecodedStream(decoded: String): String? {
+        val trimmed = decoded.trim().trim('"')
+        if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) return trimmed
+        return runCatching { JSONObject(trimmed) }.getOrNull()?.let { urlFromJson(it) }
+    }
+
+    private fun urlFromJson(json: JSONObject): String? {
+        var fallback: String? = null
+        fun scan(obj: JSONObject): String? {
+            val keys = obj.keys()
+            while (keys.hasNext()) {
+                val key = keys.next()
+                when (val value = obj.opt(key)) {
+                    is String -> {
+                        if (value.startsWith("http://") || value.startsWith("https://")) {
+                            if (key in STREAM_URL_KEYS) return value
+                            if (fallback == null) fallback = value
+                        }
+                    }
+
+                    is JSONObject -> scan(value)?.let { return it }
+                    is JSONArray -> for (index in 0 until value.length()) {
+                        (value.opt(index) as? JSONObject)?.let { scan(it)?.let { url -> return url } }
+                    }
+
+                    else -> Unit
+                }
+            }
+            return null
+        }
+        return scan(json) ?: fallback
+    }
 
     private fun mimeType(url: String, declaredType: String): String = when {
         declaredType.equals("dash", true) || url.substringBefore('?').endsWith(".mpd", true) ->
@@ -252,6 +345,18 @@ class VideasyExtractor : Extractor() {
         val LEGACY_API_HOSTS = setOf("api.videasy.net", "api.videasy.to")
         val PLAYER_HOSTS = setOf("player.videasy.net", "player.videasy.to")
         const val DEFAULT_PLAYER_ENDPOINT = "m4uhd"
+        const val STREAM_PATH = "ffff1f6738309ae837ebfa1cc8cdde9390c88177/ilaif/lwUXbKKAnnM"
+        val STREAM_URL_KEYS = setOf(
+            "url",
+            "file",
+            "source",
+            "src",
+            "location",
+            "link",
+            "stream",
+            "playback",
+            "data",
+        )
         val LEGACY_ENDPOINTS = mapOf(
             "mb-flix" to "neon2",
             "downloader2" to "neon2",
