@@ -12,6 +12,7 @@ import javax.net.ssl.SSLContext
 import javax.net.ssl.SSLSocketFactory
 import javax.net.ssl.TrustManager
 import javax.net.ssl.X509TrustManager
+import java.net.Inet4Address
 import java.net.InetAddress
 
 object DnsResolver : Dns {
@@ -43,7 +44,11 @@ object DnsResolver : Dns {
         val providerName = if (_url.isEmpty()) "SYSTEM" else _url
         Log.d(TAG, "Resolving host: $hostname using provider: $providerName")
         return try {
-            val addresses = _internalDoh.lookup(hostname)
+            // Deterministic order: prefer IPv4 so consecutive requests (e.g. a token
+            // fetch and the playback that uses it) resolve to the same address family.
+            // DoH merges A + AAAA results in nondeterministic arrival order, which
+            // made IP-bound tokens fail when the two requests picked different families.
+            val addresses = _internalDoh.lookup(hostname).sortedBy { it !is Inet4Address }
             Log.d(TAG, "Resolved $hostname to: ${addresses.joinToString { it.hostAddress ?: "" }}")
             addresses
         } catch (e: Exception) {
@@ -53,7 +58,7 @@ object DnsResolver : Dns {
             }
 
             Log.w(TAG, "Falling back to system DNS for host: $hostname")
-            val fallbackAddresses = Dns.SYSTEM.lookup(hostname)
+            val fallbackAddresses = Dns.SYSTEM.lookup(hostname).sortedBy { it !is Inet4Address }
             Log.d(TAG, "System DNS resolved $hostname to: ${fallbackAddresses.joinToString { it.hostAddress ?: "" }}")
             fallbackAddresses
         }

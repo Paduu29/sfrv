@@ -43,6 +43,7 @@ abstract class Extractor {
             MoflixExtractor(),
             MStreamDayExtractor(),
             VidsrcNetExtractor(),
+            VidsrcMeExtractor(),
             StreamWishExtractor(),
             StreamWishExtractor.UqloadsXyz(),
             StreamWishExtractor.SwishExtractor(),
