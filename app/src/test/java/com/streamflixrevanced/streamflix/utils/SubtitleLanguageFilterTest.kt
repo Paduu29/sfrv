@@ -79,6 +79,36 @@ class SubtitleLanguageFilterTest {
     }
 
     @Test
+    fun `ranks provider results using configured language priority`() {
+        val priority = listOf("es", "en", "de")
+
+        assertEquals(
+            0,
+            SubtitleLanguageFilter.priorityIndex(
+                selected = selected,
+                label = "Spanish (Latin America)",
+                priority = priority,
+            ),
+        )
+        assertEquals(
+            1,
+            SubtitleLanguageFilter.priorityIndex(
+                selected = selected,
+                label = "English",
+                priority = priority,
+            ),
+        )
+        assertEquals(
+            2,
+            SubtitleLanguageFilter.priorityIndex(
+                selected = selected,
+                label = "German",
+                priority = priority,
+            ),
+        )
+    }
+
+    @Test
     fun `all preserves existing behavior and empty disables external results`() {
         val french = SubDL.Subtitle(lang = "French")
         assertTrue(SubtitleLanguageFilter.allowsSubDLSubtitle(french, setOf("all")))

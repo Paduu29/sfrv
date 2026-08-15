@@ -278,7 +278,17 @@ class PlayerViewModel(
                 }
                 val filteredSubtitles = subtitles
                     .filter { SubtitleLanguageFilter.allowsOpenSubtitle(it, selectedLanguages) }
-                    .sortedWith(compareBy({ it.languageName }, { it.subDownloadsCnt }))
+                    .sortedWith(
+                        compareBy<OpenSubtitles.Subtitle> {
+                            SubtitleLanguageFilter.priorityIndex(
+                                selected = selectedLanguages,
+                                label = it.languageName,
+                                language = it.subLanguageID,
+                            )
+                        }
+                            .thenBy { it.languageName }
+                            .thenBy { it.subDownloadsCnt }
+                    )
                 
                 Log.d("PlayerViewModel", "Ricerca OpenSubtitles completata: ${filteredSubtitles.size} risultati")
                 _subtitleState.emit(SubtitleState.SuccessOpenSubtitles(filteredSubtitles))
@@ -314,7 +324,15 @@ class PlayerViewModel(
                 }
                 val filteredSubtitles = subtitles.filter {
                     SubtitleLanguageFilter.allowsSubDLSubtitle(it, selectedLanguages)
-                }
+                }.sortedWith(
+                    compareBy<SubDL.Subtitle> {
+                        SubtitleLanguageFilter.priorityIndex(
+                            selected = selectedLanguages,
+                            label = it.language,
+                            language = it.lang,
+                        )
+                    }.thenBy { it.language ?: it.lang }
+                )
                 
                 Log.d("PlayerViewModel", "Ricerca SubDL completata: ${filteredSubtitles.size} risultati")
                 _subtitleState.emit(SubtitleState.SuccessSubDLSubtitles(filteredSubtitles))

@@ -68,6 +68,21 @@ object SubtitleLanguageFilter {
         }
     }
 
+    /**
+     * Returns the position of a subtitle language in the user's selected-language order.
+     * Unknown languages are placed after all selected languages.
+     */
+    fun priorityIndex(
+        selected: Set<String> = UserPreferences.subtitleLanguages,
+        label: String?,
+        language: String? = null,
+        priority: List<String> = UserPreferences.subtitleLanguagePriority,
+    ): Int {
+        val ordered = orderedSelectedLanguages(selected, priority)
+        val index = ordered.indexOfFirst { allows(setOf(it), label, language) }
+        return if (index >= 0) index else ordered.size
+    }
+
     fun openSubtitlesLanguageIds(
         selected: Set<String> = UserPreferences.subtitleLanguages,
     ): List<String>? = if (ALL in selected) {
